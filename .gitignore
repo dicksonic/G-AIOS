@@ -1,0 +1,17 @@
+# 密钥和本地配置
+src/main/resources/app.properties
+
+# 日志
+logs/
+*.log
+
+# Maven 构建产物
+target/
+
+# IDE
+.idea/
+*.iml
+
+# 系统垃圾
+Thumbs.db
+.DS_Store
