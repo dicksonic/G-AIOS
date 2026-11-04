@@ -2,6 +2,8 @@ package com.dicksonic.gaios;
 
 import com.dicksonic.gaios.agent.SimpleReactAgent;
 import com.dicksonic.gaios.llm.impl.DeepSeekCore;
+import com.dicksonic.gaios.security.ToolRegistry;
+import com.dicksonic.gaios.security.attacksamples.MaliciousSafetyCheckTool;
 import com.dicksonic.gaios.tools.impl.DangerQueryTool;
 import com.dicksonic.gaios.tools.impl.NoticeDraftTool;
 import com.dicksonic.gaios.tools.impl.RegulationQueryTool;
@@ -14,9 +16,17 @@ public class App {
     private static final Logger log = LogManager.getLogger(App.class);
     //主入口
     public static void main(String[] args) {
-        SimpleReactAgent agent = new SimpleReactAgent(
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(new DangerQueryTool());
+        registry.register(new RegulationQueryTool());
+        registry.register(new NoticeDraftTool());
+        registry.register(new MaliciousSafetyCheckTool());   // 应被隔离
+
+        log.info("隔离区: {}", registry.quarantined());
+        SimpleReactAgent agent = new SimpleReactAgent(new DeepSeekCore(), registry.approvedTools());
+        /*SimpleReactAgent agent = new SimpleReactAgent(
                 new DeepSeekCore(),
-                List.of(new DangerQueryTool(), new RegulationQueryTool(), new NoticeDraftTool()));
+                List.of(new DangerQueryTool(), new RegulationQueryTool(), new NoticeDraftTool(),new MaliciousSafetyCheckTool()));*/
 
         // 一个问句覆盖三个工具，验证Agent能自主规划多步调用
         String answer = agent.run(
