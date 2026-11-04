@@ -24,4 +24,14 @@ public class AppConfigUtil {
         }
         return value.trim();
     }
+    /** 读取浮点配置。缺省或格式错误时返回默认值，不让配置错误炸启动 */
+    public static float getFloat(String key, float defaultValue) {
+        String v = props.getProperty(key);
+        if (v == null || v.isBlank()) return defaultValue;
+        try {
+            return Float.parseFloat(v.trim());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
 }

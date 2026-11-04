@@ -24,7 +24,7 @@ public class DeepSeekCore implements LLMCore {
     private static final String URL = AppConfigUtil.get("deepseek.base.url");
     private final String apiKey = AppConfigUtil.get("deepseek.api.key");
     private final String model = AppConfigUtil.get("deepseek.model");
-    private final String temperature = AppConfigUtil.get("deepseek.temperature");
+    private final float temperature = AppConfigUtil.getFloat("deepseek.temperature",1.0f);
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -52,6 +52,12 @@ public class DeepSeekCore implements LLMCore {
 
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             JsonNode root = mapper.readTree(resp.body());
+            if (!root.has("choices")) {
+                // API 返回错误对象（欠费/限流/key失效）：原文打日志，别让 NPE 掩盖真凶
+                log.error("DeepSeek返回异常: {}", resp.body());
+                throw new RuntimeException("DeepSeek API 错误: "
+                        + root.path("error").path("message").asText("未知错误，见上方日志"));
+            }
             // 每次调用记录 token 消耗——这是"审计回放中心"的第一个数据字段
             JsonNode usage = root.path("usage");
             log.info("token消耗: prompt={} completion={} total={}",
