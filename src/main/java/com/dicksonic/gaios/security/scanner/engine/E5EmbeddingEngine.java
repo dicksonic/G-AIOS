@@ -28,12 +28,11 @@ public class E5EmbeddingEngine implements AutoCloseable {
     private final OrtEnvironment env = OrtEnvironment.getEnvironment();
     private final OrtSession session;
     private final HuggingFaceTokenizer tokenizer;
-    private final int dim;
 
     public E5EmbeddingEngine(Path modelDir) throws Exception {
-        this.session = env.createSession(modelDir.resolve("model_quantized.onnx").toString());
+        this.session = env.createSession(modelDir.resolve("model_quantized_base.onnx").toString());
         this.tokenizer = HuggingFaceTokenizer.newInstance(modelDir.resolve("tokenizer.json"));
-        this.dim = 384; // multilingual-e5-small 的输出维度
+        // multilingual-e5-small 的输出维度
         log.info("E5 引擎加载成功, 输入节点: {}", session.getInputInfo().keySet());
     }
 
@@ -81,6 +80,7 @@ public class E5EmbeddingEngine implements AutoCloseable {
      * 有效 token 数：N = Σᵢ mᵢ。
      */
     private float[] meanPoolAndNormalize(float[][] tokenVecs, long[] mask) {
+        int dim = tokenVecs[0].length;
         float[] pooled = new float[dim];
         long tokenCount = 0;
         for (int i = 0; i < tokenVecs.length; i++) {

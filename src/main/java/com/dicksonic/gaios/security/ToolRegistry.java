@@ -38,9 +38,10 @@ public class ToolRegistry {
             return false;
         }
         // Stage II：语义检测，抓无特征的投毒
+        // Stage II + Stage III：语义检测（清晰区 E5 直判，灰色区内部升级 LLM 仲裁）
         if (stage2.isMalicious(tool.name(), tool.description())) {
             quarantine.add(tool.name());
-            log.warn("[隔离] 工具 {} 未通过Stage II(语义)", tool.name());
+            log.warn("[隔离] 工具 {} 未通过语义安监", tool.name());
             return false;
         }
         approved.add(tool);

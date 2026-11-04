@@ -20,4 +20,8 @@ public interface Tool {
     /** 入参出参都用 JSON 字符串，模拟 MCP 的文本协议 */
     /** 执行工具。argsJson 为模型生成的 JSON 参数字符串，返回值会回喂给模型 */
     String execute(String argsJson);
+
+    static String fmt(double d) {
+        return String.format("%.3f", d);
+    }
 }

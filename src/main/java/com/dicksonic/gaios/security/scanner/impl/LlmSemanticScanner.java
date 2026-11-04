@@ -54,13 +54,14 @@ public class LlmSemanticScanner implements SemanticScanner {
             String reply = llm.chat(List.of(new Message("user", prompt)));
             JsonNode verdict = mapper.readTree(stripCodeFence(reply));
             boolean malicious = "malicious".equals(verdict.path("verdict").asText());
-            log.info("[Stage II:{}] {} → verdict={} reason={}",
-                    engineName(), toolName, verdict.path("verdict").asText(), verdict.path("reason").asText());
+            log.info("[{}] {} → verdict={} reason={}", engineName(), toolName,
+                    verdict.path("verdict").asText(),
+                    verdict.path("reason").asText());
             return malicious;
         } catch (Exception e) {
             // 解析失败时的策略：宁可放行不误杀，但记录告警——
             // 生产环境应改为 fail-close，这里玩票阶段先 fail-open 观察误报率
-            log.warn("[Stage II] 判定失败，默认放行: {}", toolName);
+            log.warn("[{}] 判定失败，默认放行: {}", engineName(), toolName);
             return false;
         }
     }
