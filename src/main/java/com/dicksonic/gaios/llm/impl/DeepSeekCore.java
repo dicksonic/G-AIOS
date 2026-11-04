@@ -24,6 +24,7 @@ public class DeepSeekCore implements LLMCore {
     private static final String URL = AppConfigUtil.get("deepseek.base.url");
     private final String apiKey = AppConfigUtil.get("deepseek.api.key");
     private final String model = AppConfigUtil.get("deepseek.model");
+    private final String temperature = AppConfigUtil.get("deepseek.temperature");
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -35,6 +36,7 @@ public class DeepSeekCore implements LLMCore {
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", model);
+            body.put("temperature",temperature);
             ArrayNode arr = mapper.createArrayNode();
             for (Message m : messages) {
                 arr.add(mapper.createObjectNode().put("role", m.role()).put("content", m.content()));

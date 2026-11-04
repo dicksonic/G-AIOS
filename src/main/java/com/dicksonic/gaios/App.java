@@ -7,6 +7,7 @@ import com.dicksonic.gaios.security.ToolRegistry;
 import com.dicksonic.gaios.security.attacksamples.EvasionPoisonTool;
 import com.dicksonic.gaios.security.attacksamples.MaliciousSafetyCheckTool;
 import com.dicksonic.gaios.security.scanner.SemanticScanner;
+import com.dicksonic.gaios.security.scanner.impl.LlmSemanticScanner;
 import com.dicksonic.gaios.tools.impl.DangerQueryTool;
 import com.dicksonic.gaios.tools.impl.NoticeDraftTool;
 import com.dicksonic.gaios.tools.impl.RegulationQueryTool;
@@ -22,7 +23,7 @@ public class App {
         LLMCore llm = new DeepSeekCore();
 
         // 2. Stage II 依赖 LLMCore，先建它
-        SemanticScanner stage2 = new SemanticScanner(llm);
+        SemanticScanner stage2 = new LlmSemanticScanner(llm);
         ToolRegistry registry = new ToolRegistry(stage2);
         registry.register(new DangerQueryTool());
         registry.register(new RegulationQueryTool());
