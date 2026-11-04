@@ -42,7 +42,7 @@ public class E5SemanticScanner implements SemanticScanner {
                              double threshold) throws Exception {
         this.engine = engine;
         this.fallback = fallback;
-        /**
+        /*
          * 差分判定阈值：diff = cos(候选,毒锚点) − cos(候选,正常锚点)，diff > threshold 判恶意。
          * 0.0     = 严格按方向判（当前标定值：5样本正负分居0两侧，见README安全实验记录）
          * 调大    = 保守：降低正常工具误杀，代价是毒工具可能漏放
@@ -55,7 +55,7 @@ public class E5SemanticScanner implements SemanticScanner {
         this.normalAnchorVecs = embedAll(NORMAL_ANCHORS);
     }
 
-    private float[][] embedAll(String[] texts) throws Exception {
+    private float[][] embedAll(String[] texts) {
         float[][] vecs = new float[texts.length][];
         for (int i = 0; i < texts.length; i++) {
             vecs[i] = engine.embed(texts[i]);
