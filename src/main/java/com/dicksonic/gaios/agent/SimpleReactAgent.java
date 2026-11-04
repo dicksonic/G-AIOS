@@ -1,5 +1,7 @@
-package com.dicksonic.gaios;
+package com.dicksonic.gaios.agent;
 
+import com.dicksonic.gaios.context.Context;
+import com.dicksonic.gaios.llm.LLMCore;
 import com.dicksonic.gaios.tools.Tool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,8 +37,8 @@ public class SimpleReactAgent {
         String toolDocs = tools.stream()
                 .map(t -> "- " + t.name() + ": " + t.description())
                 .collect(Collectors.joining("\n"));
-
-        String system = """
+        Context ctx = new Context();
+        ctx.addSystem("""
                 你是建设工程质量安全监管助手。你可以使用以下工具：
                 %s
 
@@ -47,23 +49,18 @@ public class SimpleReactAgent {
                 规则：
                 1. 需要查数据时先调工具，不要编造
                 2. 每次只输出JSON，不要有任何其他文字
-                """.formatted(toolDocs);
-
+                """.formatted(toolDocs));
+        ctx.addUser(userQuestion + "\n\n请给出下一步JSON决策。");
         /*
          * 历史记录：所有工具执行结果都追加到这里。
          * 注意当前实现的缺陷：每轮都是全量重发（token 膨胀）。
          * 这是刻意的——D4 做上下文管理时会亲手把它改成"摘要+快照"，
          * 那是对 AIOS Context Manager 最真实的复现。
          */
-        String history = "";
         for (int turn = 1; turn <= MAX_TURNS; turn++) {
-            String userMsg = userQuestion
-                    + (history.isEmpty() ? "" : "\n\n已执行的工具结果：\n" + history)
-                    + "\n\n现在请给出下一步JSON决策。";
-
-            String reply = llm.chat(system, userMsg);
+            String reply = llm.chat(ctx.snapshot());
             log.info("第{}轮模型决策: {}", turn, reply);
-
+            ctx.addAssistant(reply);
             try {
                 JsonNode decision = mapper.readTree(stripCodeFence(reply));
                 String action = decision.path("action").asText();
@@ -80,22 +77,22 @@ public class SimpleReactAgent {
                     if (tool == null) {
                         // 模型幻觉出不存在的工具：把错误回喂，让它自我修正
                         // 伏笔：如果这里"不存在的工具"是被恶意注册进来的呢？安全内核要管这件事
-                        history += "\n[系统] 工具不存在: " + toolName + "，请换一个或给出最终回答";
+                        ctx.addUser("[系统] 工具不存在: " + toolName + "，请换一个或给出最终回答");
                         continue;
                     }
                     String result = tool.execute(decision.path("args").toString());
-                    history += "\n[工具 " + toolName + " 返回] " + result;
+                    ctx.addToolResult(toolName, result);
                     continue;
                 }
-                history += "\n[系统] 无法识别的action: " + action;
+                ctx.addUser("[系统] 无法识别的action: " + action);
             }
             catch (Exception e) {
                 // 模型输出不是合法JSON（最常见：多嘴加了解释文字），回喂错误让它重试
                 log.warn("JSON解析失败: {}", reply);
-                history += "\n[系统] 你上次的回复不是合法JSON，请重新输出";
+                ctx.addUser("[系统] 你上次的回复不是合法JSON，请重新输出");
             }
         }
-        return "超过最大轮数，未能完成。已执行记录：" + history;
+        return "超过最大轮数，未能完成。";
     }
 
     /** 模型有时会输出 ```json ... ``` 包裹的JSON，剥掉代码围栏 */

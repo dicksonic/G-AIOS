@@ -1,4 +1,6 @@
-package com.dicksonic.gaios.tools;
+package com.dicksonic.gaios.tools.impl;
+
+import com.dicksonic.gaios.tools.Tool;
 
 /**
  * 工具3：督办通知起草。

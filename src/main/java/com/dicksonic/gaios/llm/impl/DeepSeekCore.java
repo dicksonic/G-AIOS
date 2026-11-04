@@ -1,18 +1,21 @@
-package com.dicksonic.gaios;
+package com.dicksonic.gaios.llm.impl;
 
+import com.dicksonic.gaios.llm.LLMCore;
+import com.dicksonic.gaios.llm.Message;
 import com.dicksonic.gaios.util.AppConfigUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.ObjectInputFilter;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 
 public class DeepSeekCore implements LLMCore {
@@ -25,17 +28,18 @@ public class DeepSeekCore implements LLMCore {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
-    public String chat(String systemPrompt, String userMessage) {
+    public String chat(List<Message> messages) {
         if (Objects.isNull(apiKey)){
             throw new IllegalStateException("缺少环境变量 DEEPSEEK_API_KEY");
         }
-        log.info("调用 DeepSeek，systemPrompt 长度={}", systemPrompt.length());
         try {
             ObjectNode body = mapper.createObjectNode();
             body.put("model", model);
-            body.set("messages", mapper.createArrayNode()
-                    .add(mapper.createObjectNode().put("role", "system").put("content", systemPrompt))
-                    .add(mapper.createObjectNode().put("role", "user").put("content", userMessage)));
+            ArrayNode arr = mapper.createArrayNode();
+            for (Message m : messages) {
+                arr.add(mapper.createObjectNode().put("role", m.role()).put("content", m.content()));
+            }
+            body.set("messages", arr);
             log.debug("请求体：{}", body);
             HttpRequest req = HttpRequest.newBuilder(URI.create(URL))
                     .header("Authorization", "Bearer " + apiKey)
@@ -46,6 +50,13 @@ public class DeepSeekCore implements LLMCore {
 
             HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
             JsonNode root = mapper.readTree(resp.body());
+            // 每次调用记录 token 消耗——这是"审计回放中心"的第一个数据字段
+            JsonNode usage = root.path("usage");
+            log.info("token消耗: prompt={} completion={} total={}",
+                    usage.path("prompt_tokens").asInt(),
+                    usage.path("completion_tokens").asInt(),
+                    usage.path("total_tokens").asInt());
+
             return root.path("choices").get(0).path("message").path("content").asText();
         } catch (Exception e) {
             log.error(e.getMessage(),e);

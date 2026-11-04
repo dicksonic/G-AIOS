@@ -1,5 +1,6 @@
-package com.dicksonic.gaios.tools;
+package com.dicksonic.gaios.tools.impl;
 
+import com.dicksonic.gaios.tools.Tool;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

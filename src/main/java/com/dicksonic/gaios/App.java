@@ -1,8 +1,10 @@
 package com.dicksonic.gaios;
 
-import com.dicksonic.gaios.tools.DangerQueryTool;
-import com.dicksonic.gaios.tools.NoticeDraftTool;
-import com.dicksonic.gaios.tools.RegulationQueryTool;
+import com.dicksonic.gaios.agent.SimpleReactAgent;
+import com.dicksonic.gaios.llm.impl.DeepSeekCore;
+import com.dicksonic.gaios.tools.impl.DangerQueryTool;
+import com.dicksonic.gaios.tools.impl.NoticeDraftTool;
+import com.dicksonic.gaios.tools.impl.RegulationQueryTool;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
