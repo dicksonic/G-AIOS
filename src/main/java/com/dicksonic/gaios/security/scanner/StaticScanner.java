@@ -1,4 +1,4 @@
-package com.dicksonic.gaios.security;
+package com.dicksonic.gaios.security.scanner;
 
 import java.util.List;
 import java.util.regex.Pattern;

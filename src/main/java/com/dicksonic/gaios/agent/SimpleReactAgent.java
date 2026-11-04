@@ -8,7 +8,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -21,11 +23,14 @@ public class SimpleReactAgent {
     private static final Logger log = LogManager.getLogger(SimpleReactAgent.class);
 
     /** 轮数上限：防止模型陷入"调工具→失败→再调"的死循环烧光 token */
-    private static final int MAX_TURNS = 5;
+    private static final int MAX_TURNS = 8;
 
     private final LLMCore llm;
     private final List<Tool> tools;
     private final ObjectMapper mapper = new ObjectMapper();
+
+    /** 调用结果缓存：key = 工具名+参数。AIOS Tool Manager 缓存机制的最小形态 */
+    private final Map<String, String> toolResultCache = new HashMap<>();
 
     public SimpleReactAgent(LLMCore llm, List<Tool> tools) {
         this.llm = llm;
@@ -80,7 +85,8 @@ public class SimpleReactAgent {
                         ctx.addUser("[系统] 工具不存在: " + toolName + "，请换一个或给出最终回答");
                         continue;
                     }
-                    String result = tool.execute(decision.path("args").toString());
+                    String cacheKey = toolName + "|" + decision.path("args").toString();
+                    String result = toolResultCache.computeIfAbsent(cacheKey, k -> tool.execute(decision.path("args").toString()));
                     ctx.addToolResult(toolName, result);
                     continue;
                 }
