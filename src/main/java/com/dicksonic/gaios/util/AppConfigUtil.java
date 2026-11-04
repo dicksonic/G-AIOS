@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.util.Properties;
 
 public class AppConfigUtil {
+    private AppConfigUtil(){}
     private static final Properties props = new Properties();
 
     static {
