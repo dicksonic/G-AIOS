@@ -1,7 +1,10 @@
 package com.dicksonic.gaios.agent;
 
 import com.dicksonic.gaios.context.Context;
+import com.dicksonic.gaios.context.summarizer.impl.LlmSummarizer;
+import com.dicksonic.gaios.context.tokenizer.impl.CharEstimateTokenizer;
 import com.dicksonic.gaios.llm.LLMCore;
+import com.dicksonic.gaios.llm.Message;
 import com.dicksonic.gaios.tools.Tool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -42,7 +45,10 @@ public class SimpleReactAgent {
         String toolDocs = tools.stream()
                 .map(t -> "- " + t.name() + ": " + t.description())
                 .collect(Collectors.joining("\n"));
-        Context ctx = new Context();
+        Context ctx = new Context(
+                new CharEstimateTokenizer(),
+                new LlmSummarizer(prompt -> llm.chat(List.of(new Message("user", prompt)))),
+                4000, 6);
         ctx.addSystem("""
                 你是建设工程质量安全监管助手。你可以使用以下工具：
                 %s
