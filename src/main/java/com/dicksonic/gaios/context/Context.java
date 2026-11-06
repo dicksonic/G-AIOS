@@ -3,12 +3,17 @@ package com.dicksonic.gaios.context;
 import com.dicksonic.gaios.context.structsum.StructuredSummary;
 import com.dicksonic.gaios.context.summarizer.Summarizer;
 import com.dicksonic.gaios.context.summarizer.impl.TemplateSummarizer;
+import com.dicksonic.gaios.context.swap.SwapStore;
+import com.dicksonic.gaios.context.swap.event.SwapEvent;
+import com.dicksonic.gaios.context.swap.impl.NoopSwapStore;
 import com.dicksonic.gaios.context.tokenizer.Tokenizer;
 import com.dicksonic.gaios.context.tokenizer.impl.CharEstimateTokenizer;
 import com.dicksonic.gaios.llm.Message;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -56,7 +61,11 @@ public class Context {
     private final Summarizer summarizer;
     private final int maxTokens;
     private final int keepRecentMessages;
+    private final SwapStore swapStore;
     private StructuredSummary summary = new StructuredSummary();
+
+    /** 本实例内换出事件序号（从 1 开始），仅用于 SwapEvent.seq */
+    private int swapSeq = 0;
 
     /** 默认装配：字符估算 + 规则摘要。SimpleReactAgent 用这个，无需改动。 */
     public Context() {
@@ -64,10 +73,15 @@ public class Context {
     }
 
     public Context(Tokenizer tokenizer, Summarizer summarizer, int maxTokens, int keepRecentMessages) {
+        this(tokenizer, summarizer, maxTokens, keepRecentMessages, new NoopSwapStore());
+    }
+
+    public Context(Tokenizer tokenizer, Summarizer summarizer, int maxTokens, int keepRecentMessages, SwapStore swapStore) {
         this.tokenizer = tokenizer;
         this.summarizer = summarizer;
         this.maxTokens = maxTokens;
         this.keepRecentMessages = keepRecentMessages;
+        this.swapStore = swapStore;
     }
 
 
@@ -161,9 +175,32 @@ public class Context {
             return;
         }
         List<Message> evicted = new ArrayList<>(messages.subList(start, start + evictCount));
-        logger.info("[Context] 触发压缩：滑出 {} 条消息进摘要（触发时 {} tokens / 预算 {}）", evicted.size(), currentTokens(), maxTokens);
-        summary = summarizer.summarize(evicted, summary);
+        int triggerTokens = currentTokens();
+        logger.info("[Context] 触发压缩：滑出 {} 条消息进摘要（触发时 {} tokens / 预算 {}）", evicted.size(), triggerTokens, maxTokens);
+        String swapTs = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        StructuredSummary merged;
+        try {
+            merged = summarizer.summarize(evicted, summary);
+        } catch (RuntimeException e) {
+            // 摘要环节异常：原文照样落盘（summaryAfter=null，审计端可知"这次只有原文、摘要缺失"），
+            // 随后原样上抛，不改变 Context 既有错误语义
+            spill(evicted, triggerTokens, swapTs, null);
+            throw e;
+        }
+        summary = merged;
         summary.setCoveredMessages(summary.getCoveredMessages() + evicted.size());
         messages.subList(start, start + evictCount).clear();
+        // D7 换出落盘：滑出原文 + 触发元数据 + 合并后的摘要快照，一并持久化
+        spill(evicted, triggerTokens, swapTs, summary.render());
+    }
+
+    /**
+     * 换出落盘（D7）。纯转发不打日志：SwapStore 实现自身保证失败只 warn 不抛，
+     * 落盘确认日志由实现侧（如 FileSwapStore）负责。
+     */
+    private void spill(List<Message> evicted, int triggerTokens, String ts, String summaryAfter) {
+        swapSeq++;
+        swapStore.spill(new SwapEvent(swapSeq, ts, triggerTokens, maxTokens, keepRecentMessages,
+                evicted, summaryAfter));
     }
 }

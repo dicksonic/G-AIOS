@@ -8,6 +8,8 @@ logs/
 # Maven 构建产物
 target/
 
+swap-logs/
+
 # IDE
 .idea/
 *.iml

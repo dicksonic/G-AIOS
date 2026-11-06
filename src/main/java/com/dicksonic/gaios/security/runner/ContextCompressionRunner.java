@@ -1,5 +1,6 @@
 package com.dicksonic.gaios.security.runner;
 
+import com.dicksonic.gaios.context.swap.impl.FileSwapStore;
 import com.dicksonic.gaios.context.tokenizer.impl.CharEstimateTokenizer;
 import com.dicksonic.gaios.context.Context;
 import com.dicksonic.gaios.context.summarizer.impl.LlmSummarizer;
@@ -12,6 +13,7 @@ import com.dicksonic.gaios.llm.impl.DeepSeekCore;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.file.Paths;
 import java.util.List;
 
 /**
@@ -56,7 +58,7 @@ public class ContextCompressionRunner {
 
     private static void runScenario(String name, Summarizer summarizer, int maxTokens) {
         log.info("========== 场景：{} ==========", name);
-        Context ctx = new Context(new CharEstimateTokenizer(), summarizer, maxTokens, DEMO_KEEP_RECENT);
+        Context ctx = new Context(new CharEstimateTokenizer(), summarizer, maxTokens, DEMO_KEEP_RECENT,new FileSwapStore(Paths.get("swap-logs")));
         ctx.addSystem(SYSTEM_PROMPT);
         int naiveTokens = simulate(ctx);
 
