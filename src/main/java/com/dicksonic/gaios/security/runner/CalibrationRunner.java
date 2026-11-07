@@ -1,6 +1,6 @@
 package com.dicksonic.gaios.security.runner;
 
-import com.dicksonic.gaios.llm.LLMCore;
+import com.dicksonic.gaios.security.scanner.enums.ScanVerdict;
 import com.dicksonic.gaios.security.scanner.SemanticScanner;
 import com.dicksonic.gaios.security.scanner.data.CalibrationSet;
 import com.dicksonic.gaios.security.scanner.engine.E5EmbeddingEngine;
@@ -51,26 +51,42 @@ public class CalibrationRunner {
 
         // ===== 管线级标定：三阶段综合准确率 =====
         // 注意：构造一个独立的 scanner 实例（不复用注册那个，避免统计污染）
-        SemanticScanner llm = fallbackScanner; // 需要 CalibrationRunner 持有 LLM 引擎，构造时传入
+        SemanticScanner llm = fallbackScanner;
         E5SemanticScanner pipeline = new E5SemanticScanner(engine, llm, 0.0);
 
-        int e5Total = 0, e5Correct = 0, llmTotal = 0, llmCorrect = 0;
+        int e5Total = 0, e5Correct = 0, llmTotal = 0, llmCorrect = 0, unknown = 0;
 
         for (String s : CalibrationSet.POISONED_SAMPLES) {
-            E5SemanticScanner.Verdict v = pipeline.judge("calib", s);
-            if ("E5-clear".equals(v.path())) { e5Total++; if (v.malicious()) e5Correct++; }
-            else { llmTotal++; if (v.malicious()) llmCorrect++; }
+            E5SemanticScanner.Verdict v = pipeline.judgeDetailed("calib", s);
+            if ("E5-clear".equals(v.path())) {
+                e5Total++;
+                if (v.outcome() == ScanVerdict.MALICIOUS) e5Correct++;
+            } else if (v.outcome() == ScanVerdict.UNKNOWN) {
+                unknown++;
+            } else {
+                llmTotal++;
+                if (v.outcome() == ScanVerdict.MALICIOUS) llmCorrect++;
+            }
         }
         for (String s : CalibrationSet.NORMAL_SAMPLES) {
-            E5SemanticScanner.Verdict v = pipeline.judge("calib", s);
-            if ("E5-clear".equals(v.path())) { e5Total++; if (!v.malicious()) e5Correct++; }
-            else { llmTotal++; if (!v.malicious()) llmCorrect++; }
+            E5SemanticScanner.Verdict v = pipeline.judgeDetailed("calib", s);
+            if ("E5-clear".equals(v.path())) {
+                e5Total++;
+                if (v.outcome() == ScanVerdict.SAFE) e5Correct++;
+            } else if (v.outcome() == ScanVerdict.UNKNOWN) {
+                unknown++;
+            } else {
+                llmTotal++;
+                if (v.outcome() == ScanVerdict.SAFE) llmCorrect++;
+            }
         }
 
         log.info("========== 管线级标定 ==========");
         log.info("清晰区(E5判定): {} 个, 正确 {} 个", e5Total, e5Correct);
         log.info("灰色区(LLM仲裁): {} 个, 正确 {} 个", llmTotal, llmCorrect);
-        log.info("综合准确率: {}/22", e5Correct + llmCorrect);
+        // UNKNOWN 单列：既不算对也不算错，fail-open 时代"蒙对/误判"的水分从此挤掉
+        log.info("仲裁失败(UNKNOWN): {} 个（不计入分母；fail-closed 下这些样本实际会被隔离）", unknown);
+        log.info("综合准确率: {}/{}", e5Correct + llmCorrect, e5Total + llmTotal);
     }
 
     /** diff = cos(候选,毒锚点max) - cos(候选,正常锚点max)，与 E5SemanticScanner 判定同式 */
@@ -86,6 +102,4 @@ public class CalibrationRunner {
         }
         return vecs;
     }
-
-
 }

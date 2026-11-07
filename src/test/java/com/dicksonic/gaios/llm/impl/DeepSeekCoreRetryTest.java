@@ -23,12 +23,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class DeepSeekCoreRetryTest {
 
     private static final String OK_BODY = """
-            {"choices":[{"index":0,"**REMOVED**":{"role":"assistant","content":"你好"}}],
+            {"choices":[{"index":0,"message":{"role":"assistant","content":"你好"}}],
              "usage":{"prompt_tokens":5,"completion_tokens":10,"total_tokens":15}}""";
     private static final String BUSY_BODY = """
-            {"error":{"**REMOVED**":"Service is too busy","type":"service_unavailable_error","param":null,"code":"service_unavailable_error"}}""";
+            {"error":{"message":"Service is too busy","type":"service_unavailable_error","param":null,"code":"service_unavailable_error"}}""";
     private static final String AUTH_BODY = """
-            {"error":{"**REMOVED**":"Authentication Fails","type":"authentication_error","param":null,"code":"authentication_error"}}""";
+            {"error":{"message":"Authentication Fails","type":"authentication_error","param":null,"code":"authentication_error"}}""";
 
     private record Reply(int status, String body) {
     }
@@ -36,6 +36,7 @@ class DeepSeekCoreRetryTest {
     private HttpServer server;
     private String baseUrl;
     private final AtomicInteger hits = new AtomicInteger();
+    private final AtomicInteger bodiesWithMessages = new AtomicInteger(); // 请求体含 messages 字段的次数
     private final List<Reply> script = new ArrayList<>();
 
     @BeforeEach
@@ -43,7 +44,11 @@ class DeepSeekCoreRetryTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             int n = hits.incrementAndGet();
-            exchange.getRequestBody().readAllBytes(); // 消费请求体，避免连接复用残留
+            // 消费请求体，避免连接复用残留
+            String reqBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            if (reqBody.contains("\"messages\"")) {
+                bodiesWithMessages.incrementAndGet();
+            }
             Reply r = script.get(Math.min(n, script.size()) - 1); // 超出脚本则重播最后一条
             byte[] bytes = r.body().getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -86,6 +91,7 @@ class DeepSeekCoreRetryTest {
 
         assertEquals("你好", out);
         assertEquals(3, hits.get(), "应重试到第3次才成功");
+        assertEquals(3, bodiesWithMessages.get(), "每次出站请求的体都必须携带 messages 字段");
         assertArrayEquals(new int[]{5, 10, 15}, usage[0], "计量回调应在成功响应时触发一次");
     }
 

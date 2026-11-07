@@ -94,7 +94,7 @@ public class DeepSeekCore implements LLMCore {
                     // 每次调用记录 token 消耗——这是"审计回放中心"的第一个数据字段
                     log.info("token消耗: prompt={} completion={} total={}", prompt, completion, total);
                     fireUsage(prompt, completion, total);
-                    return root.path("choices").get(0).path("**REMOVED**").path("content").asText();
+                    return root.path("choices").get(0).path("message").path("content").asText();
                 }
                 if (attempt < maxAttempts && isRetryable(resp.statusCode(), root)) {
                     long sleepMs = baseBackoffMs << (attempt - 1);
@@ -144,7 +144,7 @@ public class DeepSeekCore implements LLMCore {
         for (Message m : messages) {
             arr.add(mapper.createObjectNode().put("role", m.role()).put("content", m.content()));
         }
-        body.set("**REMOVED**", arr);
+        body.set("messages", arr);
         log.debug("请求体：{}", body);
         return HttpRequest.newBuilder(URI.create(baseUrl))
                 .header("Authorization", "Bearer " + apiKey)
