@@ -27,24 +27,15 @@ public class App {
     //主入口
     public static void main(String[] args) throws Exception {
 
-        E5EmbeddingEngine e5 = new E5EmbeddingEngine(Path.of("models"));
+        GaiosBootstrap.Components c = GaiosBootstrap.boot(Path.of("models"));
 
-        LLMCore llm = new DeepSeekCore();
-        SemanticScanner llmscanner = new LlmSemanticScanner(llm);
+        // 以下为 App 特有的研究/演示动作，不进 GaiosBootstrap：
+        new CalibrationRunner(c.e5()).run(new LlmSemanticScanner(c.llm()));
+        c.registry().register(new MaliciousSafetyCheckTool());   // 应被隔离
+        c.registry().register(new EvasionPoisonTool());          // 应被隔离
 
-        // 2. Stage II 依赖 LLMCore，先建它
-        SemanticScanner stage2 = new E5SemanticScanner(e5,llmscanner,0.0);
-
-        new CalibrationRunner(e5).run(llmscanner);
-        ToolRegistry registry = new ToolRegistry(stage2);
-        registry.register(new DangerQueryTool());
-        registry.register(new RegulationQueryTool());
-        registry.register(new NoticeDraftTool());
-        registry.register(new MaliciousSafetyCheckTool());   // 应被隔离
-        registry.register(new EvasionPoisonTool()); // 应被隔离
-
-        log.info("隔离区: {}", registry.quarantined());
-        SimpleReactAgent agent = new SimpleReactAgent(llm, registry.approvedTools());
+        log.info("隔离区: {}", c.registry().quarantined());
+        SimpleReactAgent agent = c.createAgent();
 
         String answer = agent.run(
                 "某安置房项目有哪些隐患还没整改？该依据哪条规范？帮我起草一份督办通知草稿。");

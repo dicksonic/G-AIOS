@@ -25,8 +25,14 @@ import java.util.stream.Collectors;
 public class SimpleReactAgent {
     private static final Logger log = LogManager.getLogger(SimpleReactAgent.class);
 
-    /** 轮数上限：防止模型陷入"调工具→失败→再调"的死循环烧光 token */
-    private static final int MAX_TURNS = 8;
+    /**
+     * 论文默认轮数上限：防止模型陷入"调工具→失败→再调"的死循环烧光 token。
+     * 取值 8 为 AIOS 复现标定值，研究流程（App）保持不动；
+     * web 生产侧经构造参数收紧——问答场景工具单一，用不上 8 轮。
+     */
+    public static final int DEFAULT_MAX_TURNS = 8;
+
+    private final int maxTurns;
 
     private final LLMCore llm;
     private final List<Tool> tools;
@@ -36,8 +42,18 @@ public class SimpleReactAgent {
     private final Map<String, String> toolResultCache = new HashMap<>();
 
     public SimpleReactAgent(LLMCore llm, List<Tool> tools) {
+        this(llm, tools, DEFAULT_MAX_TURNS);
+    }
+
+    /**
+     * @param maxTurns 轮数上限。取值依据：web 问答场景工具单一（查条文），
+     *        典型路径=1 轮工具调用+1 轮收口，给 4 留足重试冗余即可。
+     *        失效条件：工具集扩展到多工具链式调用（M2 隐患闭环）时需按链路长度重估。
+     */
+    public SimpleReactAgent(LLMCore llm, List<Tool> tools, int maxTurns) {
         this.llm = llm;
         this.tools = tools;
+        this.maxTurns = maxTurns;
     }
 
     public String run(String userQuestion) {
@@ -68,7 +84,7 @@ public class SimpleReactAgent {
          * 这是刻意的——D4 做上下文管理时会亲手把它改成"摘要+快照"，
          * 那是对 AIOS Context Manager 最真实的复现。
          */
-        for (int turn = 1; turn <= MAX_TURNS; turn++) {
+        for (int turn = 1; turn <= maxTurns; turn++) {
             String reply = llm.chat(ctx.snapshot());
             log.info("第{}轮模型决策: {}", turn, reply);
             ctx.addAssistant(reply);
@@ -104,7 +120,7 @@ public class SimpleReactAgent {
                 ctx.addUser("[系统] 你上次的回复不是合法JSON，请重新输出");
             }
         }
-        return "超过最大轮数，未能完成。";
+        return "超过最大轮数(" + maxTurns + ")，未能完成。";
     }
 
     /** 模型有时会输出 ```json ... ``` 包裹的JSON，剥掉代码围栏 */
