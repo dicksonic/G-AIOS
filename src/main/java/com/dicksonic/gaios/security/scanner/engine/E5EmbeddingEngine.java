@@ -36,14 +36,27 @@ public class E5EmbeddingEngine implements AutoCloseable {
         log.info("E5 引擎加载成功, 输入节点: {}", session.getInputInfo().keySet());
     }
 
+    /** 查询端嵌入。E5 硬规则：查询必须带 "query: " 前缀（模型在带前缀数据上训练，漏前缀向量质量明显变差） */
+    public float[] embed(String text) {
+        return embedWithPrefix("query: ", text);
+    }
+
+    /**
+     * 文档端嵌入（M1-5 新增）：被检索的条文/文档必须带 "passage: " 前缀，
+     * 与查询端配对使用。安检场景不受影响（继续走 embed）。
+     */
+    public float[] embedPassage(String text) {
+        return embedWithPrefix("passage: ", text);
+    }
+
     /**
      * 文本 → 归一化向量。
      * 注意 E5 的硬规则：所有输入必须加 "query: " 或 "passage: " 前缀，
      * 模型是在带前缀的数据上训练的，漏掉前缀向量质量明显变差。
      */
-    public float[] embed(String text){
+    public float[] embedWithPrefix(String prefix, String text){
         try{
-            Encoding enc = tokenizer.encode("query: " + text);
+            Encoding enc = tokenizer.encode(prefix + text);
             long[] ids = enc.getIds();
             long[] mask = enc.getAttentionMask();
 
@@ -61,7 +74,7 @@ public class E5EmbeddingEngine implements AutoCloseable {
                 // 输出 [1, seqLen, 384]：每个 token 一个向量 模型的第 0 个输出节点
                 float[][][] hidden = (float[][][]) result.get(0).getValue();
                 OnnxTensor out = (OnnxTensor) result.get(0);
-                log.info("输出shape: {}", java.util.Arrays.toString(out.getInfo().getShape()));
+                log.debug("输出shape: {}", java.util.Arrays.toString(out.getInfo().getShape()));
                 return meanPoolAndNormalize(hidden[0], mask);
             }
         }
