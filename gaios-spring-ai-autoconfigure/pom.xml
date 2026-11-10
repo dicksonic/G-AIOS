@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.dicksonic</groupId>
+        <artifactId>g-aios-parent</artifactId>
+        <version>0.1</version>
+    </parent>
+    <artifactId>gaios-spring-ai-autoconfigure</artifactId>
+    <description>G-AIOS × Spring Boot 自动装配：Access Manager L1/L2/L3 审批关卡。
+        引依赖即生效——以 ToolCallingManager bean 形式接管 Spring AI 工具执行闸口，
+        每次工具执行前过审批门（gaios.access.tool-levels.* 配置分级）。</description>
+
+    <properties>
+        <!-- Spring AI 2.0.2 官方基线（其 autoconfigure 构件 pom 实测依赖 4.1.2）。
+             只用于本模块的 boot 依赖版本，不污染父 pom。 -->
+        <spring-boot.version>4.1.2</spring-boot.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+        <!-- Boot 自动装配注解面。optional=true：消费方必为 Boot 应用自带，
+             与 spring-ai 官方 autoconfigure 构件的依赖姿势一致。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>${spring-boot.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+
+        <!-- ===== 测试 ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- ApplicationContextRunner（auto-config 官方标准测法）+ AssertJ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 端到端测试：真实 ChatClient 自动装配链 + scripted ChatModel -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-client-chat</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-autoconfigure-model-tool</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-autoconfigure-model-chat-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <!-- surefire 由父 pom 托管（3.2.5），本模块不再局部声明 -->
+</project>

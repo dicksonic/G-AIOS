@@ -11,6 +11,7 @@
         <module>gaios-core</module>
         <module>gaios-samples</module>
         <module>gaios-spring-ai-adapter</module>
+        <module>gaios-spring-ai-autoconfigure</module>
     </modules>
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
