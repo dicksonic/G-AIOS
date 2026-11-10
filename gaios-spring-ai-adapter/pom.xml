@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.dicksonic</groupId>
+        <artifactId>g-aios-parent</artifactId>
+        <version>0.1</version>
+    </parent>
+    <artifactId>gaios-spring-ai-adapter</artifactId>
+    <description>G-AIOS × Spring AI 适配层：把三阶段工具安检+调用审计包装成 Spring AI 工具注册点装饰器（姿势 C）。gaios-core 保持零 Spring。</description>
+    <dependencies>
+        <dependency>
+            <groupId>com.dicksonic</groupId>
+            <artifactId>g-aios</artifactId>
+            <version>0.1</version>
+        </dependency>
+        <!-- Spring AI 2.0 起 ToolCallback/ToolDefinition 在 spring-ai-model（原 spring-ai-core 已拆分）。
+             刻意只依赖 API 构件、不引 spring-context：装饰器是纯 Java，
+             任何 Spring 版本（含非 Boot 环境）都能用；auto-config 属后续分包。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

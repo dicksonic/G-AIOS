@@ -10,6 +10,7 @@
     <modules>
         <module>gaios-core</module>
         <module>gaios-samples</module>
+        <module>gaios-spring-ai-adapter</module>
     </modules>
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
@@ -19,6 +20,15 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <!-- Spring AI BOM：M2-5 adapter 模块用。钉 2.0.2 GA（2.1 仍是 RC），
+                 防 churn 原则：只用官方 hook/装饰器面，RC 新特性一律不碰 -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>2.0.2</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
@@ -52,4 +62,15 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+    <build>
+        <plugins>
+            <!-- 父 pom 未管 surefire 版本，Maven 内置 2.12.4 不认 JUnit 5（静默 0 测试）。
+                 模块内局部钉 3.x，不外溢到 core/samples——它们的测试体系归仓主自己管 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
 </project>

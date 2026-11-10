@@ -39,8 +39,10 @@ public final class GaiosBootstrap {
      * @param e5       E5 嵌入引擎（安检 Stage II 与条文语义检索共用同一实例，M1 复用点）
      * @param llm      文本模型核心
      * @param registry 工具注册中心（3 个业务工具已过三阶段安检）
+     * @param scanner  装配好的 Stage II/III 语义安检链（M2-5 加法：Spring AI adapter
+     *                 复用同一条管线注册第三方 ToolCallback，保证判定逻辑只有一处事实源）
      */
-    public record Components(E5EmbeddingEngine e5, LLMCore llm, ToolRegistry registry) {
+    public record Components(E5EmbeddingEngine e5, LLMCore llm, ToolRegistry registry, SemanticScanner scanner) {
 
         /** 取当前 approvedTools() 快照创建 Agent；调用方应在此之后不再注册新工具。 */
         public SimpleReactAgent createAgent() {
@@ -75,6 +77,6 @@ public final class GaiosBootstrap {
         }
         log.info("[GaiosBootstrap] 运行时装配完成：models={}, 业务工具 {} 个，隔离区 {}",
                 modelsDir.toAbsolutePath(), registry.approvedTools().size(), registry.quarantined());
-        return new Components(e5, llm, registry);
+        return new Components(e5, llm, registry, stage2);
     }
 }
