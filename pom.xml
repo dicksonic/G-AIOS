@@ -12,6 +12,7 @@
         <module>gaios-samples</module>
         <module>gaios-spring-ai-adapter</module>
         <module>gaios-spring-ai-autoconfigure</module>
+        <module>gaios-spring-ai-scanner</module>
     </modules>
     <properties>
         <maven.compiler.source>21</maven.compiler.source>

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.dicksonic</groupId>
+        <artifactId>g-aios-parent</artifactId>
+        <version>0.1</version>
+    </parent>
+    <artifactId>gaios-spring-ai-scanner</artifactId>
+    <description>G-AIOS × Spring Boot 自动装配：安检链进容器（M2-7）。
+        引依赖即生效——E5/LLM 仲裁/SemanticScanner 全链由 gaios.scanner.* 属性装配；
+        启动时自动全扫容器内 ToolCallback 过三阶段安检，放行注册进
+        ToolCallbackResolver（顶掉框架默认），被拦的进隔离区留墓碑+告警。
+        独立于 gaios-spring-ai-autoconfigure：只要审批门不要安检的用户
+        不会被本模块拖进 DJL/ONNX 依赖。
+    </description>
+
+    <properties>
+        <!-- 与 gaios-spring-ai-autoconfigure 同一基线：Spring AI 2.0.2 官方配套 Boot 版本 -->
+        <spring-boot.version>4.1.2</spring-boot.version>
+    </properties>
+
+    <dependencies>
+        <!-- core：SemanticScanner/E5/LLMCore 的唯一定义处（零 Spring，本模块不动它） -->
+        <dependency>
+            <groupId>com.dicksonic</groupId>
+            <artifactId>g-aios</artifactId>
+            <version>0.1</version>
+        </dependency>
+        <!-- adapter：GaiosSecureToolRegistry（注册点装饰器）直接复用，判定逻辑只有一处事实源 -->
+        <dependency>
+            <groupId>com.dicksonic</groupId>
+            <artifactId>gaios-spring-ai-adapter</artifactId>
+            <version>0.1</version>
+        </dependency>
+        <!-- ChatModel/ToolCallback/ToolCallbackResolver API 面（版本由父 pom 的 spring-ai-bom 托管） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model</artifactId>
+        </dependency>
+        <!-- 墓碑 JSON 序列化（版本由父 pom 托管） -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <!-- Boot 自动装配注解面。optional=true：消费方必为 Boot 应用自带，
+             与 spring-ai 官方 autoconfigure 构件的依赖姿势一致。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>${spring-boot.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+
+        <!-- ===== 测试（全桩化：单测不触 E5/DJL/ONNX 与任何真实模型） ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- ApplicationContextRunner（auto-config 官方标准测法）+ AssertJ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- 与框架 ToolCallingAutoConfiguration 的退位竞争验收 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-autoconfigure-model-tool</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    <!-- surefire 由父 pom 托管（3.2.5），本模块不再局部声明 -->
+</project>
