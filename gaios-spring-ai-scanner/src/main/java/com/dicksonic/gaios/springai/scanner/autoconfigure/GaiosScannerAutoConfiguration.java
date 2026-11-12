@@ -7,15 +7,15 @@ import com.dicksonic.gaios.security.scanner.impl.E5SemanticScanner;
 import com.dicksonic.gaios.security.scanner.impl.LlmSemanticScanner;
 import com.dicksonic.gaios.springai.GaiosSecureToolRegistry;
 import com.dicksonic.gaios.springai.scanner.ChatModelLlmCore;
+import com.dicksonic.gaios.springai.scanner.ContainerToolScanHook;
 import com.dicksonic.gaios.springai.scanner.GaiosSecureToolCallbackResolver;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.resolution.ToolCallbackResolver;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -46,8 +46,9 @@ import java.util.List;
  *   <li><b>容器全扫</b>（gaios.scanner.auto-scan=true 时）：注册
  *       GaiosSecureToolCallbackResolver 为 ToolCallbackResolver bean，
  *       beforeName 先于 spring-ai 的 ToolCallingAutoConfiguration，后者
- *       {@code @ConditionalOnMissingBean} 自动退位；构造即全扫容器工具，
- *       被拦的立墓碑+启动 WARN 汇总告警。</li>
+ *       {@code @ConditionalOnMissingBean} 自动退位；扫描由 ContainerToolScanHook
+ *       在所有单例就绪后触发（v4：创建期扫描会与真实模型 starter 闭环成
+ *       循环依赖），被拦的立墓碑+启动 WARN 汇总告警。</li>
  * </ol>
  *
  * <p><b>与 M2-6 审批门的衔接：</b>M2-6 的 GaiosApprovalToolCallingManager 以
@@ -56,15 +57,14 @@ import java.util.List;
  *
  * <p><b>fail-fast 哲学（注册期 fail-closed 的装配层镜像）：</b>models-dir 缺失、
  * E5 模型加载失败、宿主无 ChatModel 可用——这三种"安检链半残"状态一律启动
- * 即炸并给出修复指引，绝不允许带病的安检链悄悄放行。</p>
+ * 即炸并给出修复指引（前两者在 bean 创建期，ChatModel 检查在单例就绪钩子内，
+ * 都在容器 refresh 内、启动失败语义一致），绝不允许带病的安检链悄悄放行。</p>
  */
 @AutoConfiguration(beforeName = "org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration")
 @ConditionalOnClass({SemanticScanner.class, ToolCallbackResolver.class})
 @ConditionalOnProperty(prefix = "gaios.scanner", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(GaiosScannerProperties.class)
 public class GaiosScannerAutoConfiguration {
-
-    private static final Logger log = LogManager.getLogger(GaiosScannerAutoConfiguration.class);
 
     /**
      * 安检链默认装配：E5 → LLMCore → SemanticScanner。
@@ -74,8 +74,6 @@ public class GaiosScannerAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnMissingBean(SemanticScanner.class)
     static class DefaultScannerConfiguration {
-
-        private static final Logger log = LogManager.getLogger(DefaultScannerConfiguration.class);
 
         /**
          * E5 嵌入引擎（Stage II 差分底座）。destroyMethod=close：ONNX session
@@ -105,26 +103,31 @@ public class GaiosScannerAutoConfiguration {
          * 仲裁 LLM（Stage III）。默认复用宿主 ChatModel——宿主的模型配置（鉴权/
          * 代理/超时）零成本继承。自定义 LLMCore bean 则本 bean 退位=独立仲裁通道
          * （例如钉回标定基线的 DeepSeekCore），无需任何配置项。
+         *
+         * <p><b>v4 修复（2026-11-12）：创建期只存 Supplier，首次仲裁才取实例。</b>
+         * 急切 getIfAvailable() 会把"resolver→registry→scanner→LLMCore→ChatModel
+         * →框架 ToolCallingManager→resolver"闭合成创建期循环依赖（框架 manager 对
+         * resolver 是构造器强注入，2.0.2 源码实证；真实模型 starter 的 ChatModel
+         * 依赖 manager）。"容器无 ChatModel"的 fail-fast 与标定护栏 WARN 平移到
+         * ContainerToolScanHook（单例就绪后执行，启动失败语义不变）。</p>
          */
         @Bean
         @ConditionalOnMissingBean(LLMCore.class)
         LLMCore gaiosArbitrationLlm(ObjectProvider<ChatModel> chatModelProvider) {
-            ChatModel chatModel = chatModelProvider.getIfAvailable();
-            if (chatModel == null) {
-                throw new IllegalStateException(
-                        "[G-AIOS] Stage III 仲裁默认复用宿主 ChatModel，但容器中没有 ChatModel bean。修复路径："
-                                + "①引入任一 spring-ai 模型 starter（如 spring-ai-starter-model-deepseek）；"
-                                + "②或自定义 LLMCore bean 接管仲裁通道；"
-                                + "③或 gaios.scanner.enabled=false 关闭本模块");
-            }
-            // 标定护栏（2026-11-08 拍板）：仲裁模型来源必须显式可见。
-            // 22/22 标定钉定 deepseek-v4-flash + prompt v2.1；宿主模型不同则判定基线可能漂移
-            log.warn("[G-AIOS] Stage III 仲裁 LLM 复用宿主 ChatModel [{}]。"
-                            + "提醒：22/22 标定基线钉定 deepseek-v4-flash + prompt v2.1——宿主模型若非该型号，"
-                            + "仲裁判定可能漂移，建议按 CalibrationRunner 重跑标定；"
-                            + "要锁定独立仲裁通道，自定义 LLMCore bean 即可整体替换本通道",
-                    chatModel.getClass().getName());
-            return new ChatModelLlmCore(chatModel);
+            return new ChatModelLlmCore(() -> {
+                ChatModel chatModel = chatModelProvider.getIfAvailable();
+                if (chatModel == null) {
+                    // 正常到不了这里：ContainerToolScanHook 已在扫描前 fail-fast。
+                    // 留着兜底：auto-scan=false（手工送检模式）下没有钩子，仲裁时
+                    // 异常由 ChatModelLlmCore 按契约折算 "error" → UNKNOWN → fail-closed
+                    throw new IllegalStateException(
+                            "[G-AIOS] Stage III 仲裁默认复用宿主 ChatModel，但容器中没有 ChatModel bean。修复路径："
+                                    + "①引入任一 spring-ai 模型 starter（如 spring-ai-starter-model-deepseek）；"
+                                    + "②或自定义 LLMCore bean 接管仲裁通道；"
+                                    + "③或 gaios.scanner.enabled=false 关闭本模块");
+                }
+                return chatModel;
+            });
         }
 
         /**
@@ -167,7 +170,7 @@ public class GaiosScannerAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(ToolCallbackResolver.class)
     @ConditionalOnProperty(prefix = "gaios.scanner", name = "auto-scan", havingValue = "true", matchIfMissing = true)
-    ToolCallbackResolver gaiosSecureToolCallbackResolver(
+    GaiosSecureToolCallbackResolver gaiosSecureToolCallbackResolver(
             GaiosSecureToolRegistry registry,
             List<ToolCallback> toolCallbacks,
             // 框架同款废弃变体：List<ToolCallbackProvider> 形态的老 bean 也纳入收集，保 parity
@@ -183,18 +186,26 @@ public class GaiosScannerAutoConfiguration {
                 .filter(provider -> !isMcpToolCallbackProvider(ResolvableType.forInstance(provider)))
                 .forEach(provider -> candidates.addAll(List.of(provider.getToolCallbacks())));
 
-        // 构造即全扫：三阶段安检在这里跑完，被拦的当场立墓碑
-        GaiosSecureToolCallbackResolver resolver = new GaiosSecureToolCallbackResolver(candidates, registry);
+        // v4：此处只收集候选、不扫描——扫描由 gaiosContainerToolScan 钩子在
+        // 所有单例就绪后触发（创建期扫描会闭环循环依赖，见 ContainerToolScanHook javadoc）。
+        // 返回具体类而非 ToolCallbackResolver 接口：钩子需要按具体类型注入
+        // （@Bean 方法返回接口时，Spring 类型预测不认具体类注入点）。
+        return new GaiosSecureToolCallbackResolver(candidates, registry);
+    }
 
-        // 启动汇总：隔离 > 0 必须 WARN 顶到运维视野（静默隔离 = 审计缺口）
-        if (resolver.quarantinedCount() > 0) {
-            log.warn("[G-AIOS] 容器工具安检完成：候选 {} 个，放行 {} 个，隔离 {} 个。隔离明细：{}",
-                    candidates.size(), resolver.approvedCount(), resolver.quarantinedCount(),
-                    registry.quarantined());
-        } else {
-            log.info("[G-AIOS] 容器工具安检完成：候选 {} 个，全部放行", candidates.size());
-        }
-        return resolver;
+    /**
+     * 容器全扫触发钩（v4）：单例全部就绪后执行 ChatModel 在位检查
+     * + 标定护栏 WARN + scanAll() + 汇总日志。启动期 fail-fast 语义不变
+     * （SmartInitializingSingleton 仍在容器 refresh 内执行，异常=启动失败）。
+     */
+    @Bean
+    @ConditionalOnBean(GaiosSecureToolCallbackResolver.class)   // 用户自定义 resolver 时我们的没注册，钩子一并退位
+    @ConditionalOnProperty(prefix = "gaios.scanner", name = "auto-scan", havingValue = "true", matchIfMissing = true)
+    ContainerToolScanHook gaiosContainerToolScan(GaiosSecureToolCallbackResolver resolver,
+                                                 GaiosSecureToolRegistry registry,
+                                                 ObjectProvider<ChatModel> chatModelProvider,
+                                                 ObjectProvider<LLMCore> llmCoreProvider) {
+        return new ContainerToolScanHook(resolver, registry, chatModelProvider, llmCoreProvider);
     }
 
     /**

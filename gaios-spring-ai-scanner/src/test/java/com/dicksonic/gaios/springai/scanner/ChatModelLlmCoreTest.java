@@ -10,6 +10,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -85,6 +86,47 @@ class ChatModelLlmCoreTest {
             }
         };
         ChatModelLlmCore core = new ChatModelLlmCore(emptyStub);
+
+        assertEquals("error", core.chat(List.of(new Message("user", "任意"))));
+    }
+
+    @Test
+    void 懒解析构造_创建期不触碰supplier() {
+        // v4 防循环依赖的核心契约：构造时 supplier 零调用
+        AtomicBoolean supplierCalled = new AtomicBoolean(false);
+        ChatModel stub = new CapturingChatModel();
+        ChatModelLlmCore core = new ChatModelLlmCore(() -> {
+            supplierCalled.set(true);
+            return stub;
+        });
+
+        assertFalse(supplierCalled.get(), "创建期调用 supplier 即违反懒解析契约（循环依赖回潮）");
+
+        String result = core.chat(List.of(new Message("user", "审查这个工具")));
+        assertTrue(supplierCalled.get(), "首次 chat 必须触发一次解析");
+        assertEquals("{\"verdict\":\"safe\"}", result);
+    }
+
+    @Test
+    void 懒解析_解析结果缓存_supplier只调一次() {
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger(0);
+        ChatModelLlmCore core = new ChatModelLlmCore(() -> {
+            calls.incrementAndGet();
+            return new CapturingChatModel();
+        });
+
+        core.chat(List.of(new Message("user", "第一次")));
+        core.chat(List.of(new Message("user", "第二次")));
+
+        assertEquals(1, calls.get(), "ChatModel 是单例，重复解析纯属浪费");
+    }
+
+    @Test
+    void 懒解析失败_按失败契约折算error() {
+        // supplier 抛异常（宿主无 ChatModel）也绝不外抛——UNKNOWN→fail-closed 链条不断
+        ChatModelLlmCore core = new ChatModelLlmCore(() -> {
+            throw new IllegalStateException("容器中没有 ChatModel bean");
+        });
 
         assertEquals("error", core.chat(List.of(new Message("user", "任意"))));
     }

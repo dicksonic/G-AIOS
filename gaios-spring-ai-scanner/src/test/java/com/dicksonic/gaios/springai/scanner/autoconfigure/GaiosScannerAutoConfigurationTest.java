@@ -13,7 +13,15 @@ import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfigurat
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.resolution.ToolCallbackResolver;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -146,6 +154,60 @@ class GaiosScannerAutoConfigurationTest {
                     assertSingleBeanOfType(context, ToolCallingManager.class);
                     assertNotNull(context.getBean(ToolCallbackResolver.class).resolve("query_data"));
                 });
+    }
+
+    /**
+     * 2026-11-12 生产事故复现拓扑（阶段 B 真机首跑炸出）：框架
+     * ToolCallingAutoConfiguration 对 ToolCallbackResolver 是构造器强注入
+     * （2.0.2 sources 实证），真实模型 starter 的 ChatModel 又依赖
+     * ToolCallingManager。v3"构造即全扫"在此拓扑下闭环成创建期循环依赖。
+     * v4 = 懒解析 ChatModel + 单例就绪后扫描，本拓扑必须绿。
+     *
+     * <p>注意：桩 SemanticScanner 令默认链退位，本用例锁定的是
+     * "manager 急切注入 resolver + ChatModel 依赖 manager"的接线拓扑无环；
+     * 默认链（ChatModelLlmCore）创建期不触碰 ChatModel 的契约由
+     * ChatModelLlmCoreTest 的懒解析用例钉死——两层合起来覆盖事故根因。
+     * （E5EmbeddingEngine 是具体类且构造即加载 ONNX，测试侧无法替身，
+     * 默认链端到端拓扑回归归阶段 B 真机 V1-V5。）</p>
+     */
+    @Test
+    void 真实starter拓扑_manager急切注入resolver_不发生循环依赖_扫描在单例就绪后完成() {
+        runner.withUserConfiguration(RealStarterTopologyConfig.class)
+                .withBean(SemanticScanner.class, GaiosScannerAutoConfigurationTest::stubScanner)
+                .withBean(ToolCallback.class, () -> stubTool("query_data", "查询测试数据"))
+                .run(context -> {
+                    assertNull(context.getStartupFailure(),
+                            "manager 急切注入 resolver 的拓扑下启动不得失败");
+                    assertSingleBeanOfType(context, ChatModel.class);
+                    // SmartInitializingSingleton 钩子在 refresh 内已跑完：解析立即可用
+                    assertNotNull(context.getBean(ToolCallbackResolver.class).resolve("query_data"));
+                });
+    }
+
+    /** 复现生产拓扑的配置：与框架/真实 starter 的依赖方向逐边对齐 */
+    @Configuration(proxyBeanMethods = false)
+    static class RealStarterTopologyConfig {
+
+        /** 框架 ToolCallingManager 的替身：构造器强注入 resolver（2.0.2 同款） */
+        @Bean
+        FakeToolCallingManager fakeToolCallingManager(ToolCallbackResolver resolver) {
+            return new FakeToolCallingManager(resolver);
+        }
+
+        /** 真实 starter 的 ChatModel 替身：依赖 ToolCallingManager（DeepSeekChatModel 同款） */
+        @Bean
+        ChatModel fakeChatModel(FakeToolCallingManager manager) {
+            return prompt -> new ChatResponse(List.of(new Generation(new AssistantMessage("{}"))));
+        }
+    }
+
+    static final class FakeToolCallingManager {
+        @SuppressWarnings("unused")
+        final ToolCallbackResolver resolver;
+
+        FakeToolCallingManager(ToolCallbackResolver resolver) {
+            this.resolver = resolver;
+        }
     }
 
     @Test
